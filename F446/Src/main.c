@@ -59,11 +59,13 @@ uint16_t counter;
 uint16_t last_count;
 uint16_t led_effect;
 int read_flag;
+char comparator[80];
+int result;
 sURI_Info URI;
 sAARInfo App;
 sSMSInfo sms;
 sGeoInfo geo;
-sVcardInfo test;
+sURI_Info test;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -110,7 +112,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  //MX_CAN1_Init();
+  // MX_CAN1_Init();
   MX_TIM10_Init();
   //MX_I2C1_Init();
 
@@ -122,8 +124,8 @@ int main(void)
   counter=0;
   last_count=-1;
   led_effect=0;
-  read_flag=0;
 
+  HAL_Delay(200);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -135,14 +137,20 @@ int main(void)
 		  last_count=counter;
 		  M24SR_Program(counter);
 	  }
-	  if(read_flag==2){
-		  read_flag=0;
-		  if(TT4_ReadVcard(&test) == SUCCESS){
-			  HAL_GPIO_TogglePin(LED3_GPIO_Port,LED3_Pin);
+	  if(read_flag==1){
+		  if(TT4_ReadURI(&test) == SUCCESS){
+			  result = strcmp(test.URI_Message,comparator);
+			  if (result == 0){
+				  HAL_GPIO_WritePin(LED3_GPIO_Port,LED3_Pin,GPIO_PIN_SET);
+			  }
+			  else {
+				  HAL_GPIO_WritePin(LED4_GPIO_Port,LED4_Pin,GPIO_PIN_SET);
+			  }
 		  }
 		  else {
-			  HAL_GPIO_TogglePin(LED4_GPIO_Port,LED4_Pin);
+			  HAL_GPIO_WritePin(LED4_GPIO_Port,LED4_Pin,GPIO_PIN_SET);
 		  }
+		  read_flag=0;
 	  }
   /* USER CODE END WHILE */
 
@@ -258,9 +266,9 @@ static void MX_TIM10_Init(void)
 {
 
   htim10.Instance = TIM10;
-  htim10.Init.Prescaler = 4999;
+  htim10.Init.Prescaler = 19999;
   htim10.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim10.Init.Period = 999;
+  htim10.Init.Period = 4499;
   htim10.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   if (HAL_TIM_Base_Init(&htim10) != HAL_OK)
   {
@@ -424,8 +432,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
 	if(GPIO_Pin == M24SR_GPO_PIN)
 	{
-		HAL_GPIO_TogglePin(LED1_GPIO_Port,LED1_Pin);
-		read_flag=1;
+		HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
 		if( uSynchroMode == M24SR_INTERRUPT_GPO)
 			GPO_Low = 1;
 	}
@@ -442,8 +449,9 @@ void M24SR_Program(uint16_t counter){
 	case 0:
 		strcpy(URI.protocol,URI_ID_0x01_STRING);
 		strcpy(URI.URI_Message,"google.com");
-		strcpy(URI.Information,"\0");
+		strcpy(URI.Information,"/0");
 		while (TT4_WriteURI(&URI) != SUCCESS);
+		strcpy(comparator,"google.com");
 		break;
 	case 1:
 		strcpy(App.PakageName,"com.sonyericsson.music");
@@ -469,42 +477,52 @@ void M24SR_Program(uint16_t counter){
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if(htim->Instance == TIM10){
-		if(led_effect==-1){
-		switch(led_effect){
-		case 0:
-			HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
-			HAL_GPIO_TogglePin(LED3_GPIO_Port,LED3_Pin);
-			led_effect++;
-			break;
-		case 1:
-			HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
-			HAL_GPIO_TogglePin(LED4_GPIO_Port,LED4_Pin);
-			led_effect++;
-			break;
-		case 2:
-			HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
-			HAL_GPIO_TogglePin(LED3_GPIO_Port,LED3_Pin);
-			led_effect++;
-			break;
-		case 3:
-			HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
-			HAL_GPIO_TogglePin(LED3_GPIO_Port,LED3_Pin);
-			HAL_GPIO_TogglePin(LED4_GPIO_Port,LED4_Pin);
-			led_effect++;
-			break;
-		case 4:
-			HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
-			HAL_GPIO_TogglePin(LED4_GPIO_Port,LED4_Pin);
-			led_effect++;
-			break;
-		case 5:
-			HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
-			HAL_GPIO_TogglePin(LED3_GPIO_Port,LED3_Pin);
-			HAL_GPIO_TogglePin(LED4_GPIO_Port,LED4_Pin);
-			led_effect=0;
-			break;
+		led_effect++;
+		if (led_effect>=10){
+			HAL_GPIO_WritePin(LED2_GPIO_Port,LED2_Pin,GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(LED3_GPIO_Port,LED3_Pin,GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(LED4_GPIO_Port,LED4_Pin,GPIO_PIN_RESET);
+			if (read_flag == 1){
+				read_flag = 0;
+			}
+			else {
+				read_flag = 1;
+			}
+			led_effect = 0;
 		}
-	}
+//		switch(led_effect){
+//		case 0:
+//			HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
+//			HAL_GPIO_TogglePin(LED3_GPIO_Port,LED3_Pin);
+//			led_effect++;
+//			break;
+//		case 1:
+//			HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
+//			HAL_GPIO_TogglePin(LED4_GPIO_Port,LED4_Pin);
+//			led_effect++;
+//			break;
+//		case 2:
+//			HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
+//			HAL_GPIO_TogglePin(LED3_GPIO_Port,LED3_Pin);
+//			led_effect++;
+//			break;
+//		case 3:
+//			HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
+//			HAL_GPIO_TogglePin(LED3_GPIO_Port,LED3_Pin);
+//			HAL_GPIO_TogglePin(LED4_GPIO_Port,LED4_Pin);
+//			led_effect++;
+//			break;
+//		case 4:
+//			HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
+//			HAL_GPIO_TogglePin(LED4_GPIO_Port,LED4_Pin);
+//			led_effect++;
+//			break;
+//		case 5:
+//			HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
+//			HAL_GPIO_TogglePin(LED3_GPIO_Port,LED3_Pin);
+//			HAL_GPIO_TogglePin(LED4_GPIO_Port,LED4_Pin);
+//			led_effect=0;
+//			break;
 	}
 }
 
