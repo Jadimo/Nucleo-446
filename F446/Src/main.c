@@ -59,6 +59,7 @@ uint16_t counter;
 uint16_t last_count;
 uint16_t led_effect;
 int read_flag;
+int can_flag;
 char comparator[80];
 int result;
 sURI_Info URI;
@@ -66,6 +67,8 @@ sAARInfo App;
 sSMSInfo sms;
 sGeoInfo geo;
 sURI_Info test;
+CanTxMsgTypeDef tmsg;
+CanRxMsgTypeDef rmsg;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -81,6 +84,7 @@ void M24SR_I2CInit(void);
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
 void M24SR_Program(uint16_t counter);
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
+void CAN_filter_init(void);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
@@ -112,7 +116,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  // MX_CAN1_Init();
+  MX_CAN1_Init();
   MX_TIM10_Init();
   //MX_I2C1_Init();
 
@@ -125,7 +129,19 @@ int main(void)
   last_count=-1;
   led_effect=0;
 
+  CAN_filter_init();
+
   HAL_Delay(200);
+
+  /*##-3- Start the Transmission process #####################################*/
+  tmsg.StdId = 0x125;
+  tmsg.IDE = CAN_ID_STD;
+  tmsg.RTR = CAN_RTR_DATA;
+  tmsg.DLC = 2;
+  tmsg.Data[0] = 0xDa;
+  tmsg.Data[1] = 0xCE;
+  hcan1.pTxMsg = &tmsg;
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -151,6 +167,10 @@ int main(void)
 			  HAL_GPIO_WritePin(LED4_GPIO_Port,LED4_Pin,GPIO_PIN_SET);
 		  }
 		  read_flag=0;
+	  }
+	  if(can_flag==1){
+		  HAL_CAN_Transmit(&hcan1, 10);
+		  can_flag = 0;
 	  }
   /* USER CODE END WHILE */
 
@@ -223,11 +243,11 @@ static void MX_CAN1_Init(void)
 {
 
   hcan1.Instance = CAN1;
-  hcan1.Init.Prescaler = 50;
+  hcan1.Init.Prescaler = 40;
   hcan1.Init.Mode = CAN_MODE_NORMAL;
   hcan1.Init.SJW = CAN_SJW_1TQ;
-  hcan1.Init.BS1 = CAN_BS1_6TQ;
-  hcan1.Init.BS2 = CAN_BS2_1TQ;
+  hcan1.Init.BS1 = CAN_BS1_7TQ;
+  hcan1.Init.BS2 = CAN_BS2_2TQ;
   hcan1.Init.TTCM = DISABLE;
   hcan1.Init.ABOM = DISABLE;
   hcan1.Init.AWUM = DISABLE;
@@ -475,10 +495,27 @@ void M24SR_Program(uint16_t counter){
 	}
 }
 
+void CAN_filter_init(void)
+{
+	CAN_FilterConfTypeDef  sFilterConfig;
+	/*##-2- Configure the CAN Filter ###########################################*/
+	sFilterConfig.FilterNumber = 0;
+    sFilterConfig.FilterMode = CAN_FILTERMODE_IDMASK;
+    sFilterConfig.FilterScale = CAN_FILTERSCALE_32BIT;
+    sFilterConfig.FilterIdHigh = 0x200 << 5;;
+    sFilterConfig.FilterIdLow = 0x0000;
+    sFilterConfig.FilterMaskIdHigh = 0x700 << 5;
+    sFilterConfig.FilterMaskIdLow = 0x0000;
+    sFilterConfig.FilterFIFOAssignment = CAN_FILTER_FIFO0;
+    sFilterConfig.FilterActivation = ENABLE;
+    sFilterConfig.BankNumber =0;
+    HAL_CAN_ConfigFilter(&hcan1, &sFilterConfig);
+}
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if(htim->Instance == TIM10){
 		led_effect++;
-		if (led_effect>=10){
+		if (led_effect>=5){
 			HAL_GPIO_WritePin(LED2_GPIO_Port,LED2_Pin,GPIO_PIN_RESET);
 			HAL_GPIO_WritePin(LED3_GPIO_Port,LED3_Pin,GPIO_PIN_RESET);
 			HAL_GPIO_WritePin(LED4_GPIO_Port,LED4_Pin,GPIO_PIN_RESET);
@@ -488,41 +525,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 			else {
 				read_flag = 1;
 			}
+			can_flag = 1;
 			led_effect = 0;
 		}
-//		switch(led_effect){
-//		case 0:
-//			HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
-//			HAL_GPIO_TogglePin(LED3_GPIO_Port,LED3_Pin);
-//			led_effect++;
-//			break;
-//		case 1:
-//			HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
-//			HAL_GPIO_TogglePin(LED4_GPIO_Port,LED4_Pin);
-//			led_effect++;
-//			break;
-//		case 2:
-//			HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
-//			HAL_GPIO_TogglePin(LED3_GPIO_Port,LED3_Pin);
-//			led_effect++;
-//			break;
-//		case 3:
-//			HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
-//			HAL_GPIO_TogglePin(LED3_GPIO_Port,LED3_Pin);
-//			HAL_GPIO_TogglePin(LED4_GPIO_Port,LED4_Pin);
-//			led_effect++;
-//			break;
-//		case 4:
-//			HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
-//			HAL_GPIO_TogglePin(LED4_GPIO_Port,LED4_Pin);
-//			led_effect++;
-//			break;
-//		case 5:
-//			HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
-//			HAL_GPIO_TogglePin(LED3_GPIO_Port,LED3_Pin);
-//			HAL_GPIO_TogglePin(LED4_GPIO_Port,LED4_Pin);
-//			led_effect=0;
-//			break;
 	}
 }
 
