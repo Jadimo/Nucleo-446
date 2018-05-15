@@ -69,6 +69,8 @@ sGeoInfo geo;
 sURI_Info test;
 CanTxMsgTypeDef tmsg;
 CanRxMsgTypeDef rmsg;
+uint8_t Canmsg[8];
+uint16_t Canid[2];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -76,7 +78,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_CAN1_Init(void);
 static void MX_TIM10_Init(void);
-static void MX_I2C1_Init(void);
+//static void MX_I2C1_Init(void);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
@@ -85,6 +87,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
 void M24SR_Program(uint16_t counter);
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
 void CAN_filter_init(void);
+void RxIntEnable(CAN_HandleTypeDef *CanHandle);
+void CanSend(uint16_t Id[2],uint8_t Msg[8]);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
@@ -118,7 +122,7 @@ int main(void)
   MX_GPIO_Init();
   MX_CAN1_Init();
   MX_TIM10_Init();
-  MX_I2C1_Init();
+ // MX_I2C1_Init();
 
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start_IT(&htim10);
@@ -130,19 +134,11 @@ int main(void)
   led_effect=0;
 
   CAN_filter_init();
+  if(HAL_CAN_Receive_IT(&hcan1, CAN_FIFO0) != HAL_OK) {
+	  HAL_GPIO_TogglePin(LED4_GPIO_Port,LED4_Pin);
+  }
 
   HAL_Delay(200);
-
-  /*##-3- Start the Transmission process #####################################*/
-  tmsg.StdId = 0x140;
-  tmsg.IDE = CAN_ID_STD;
-  tmsg.RTR = CAN_RTR_DATA;
-  tmsg.DLC = 4;
-  tmsg.Data[0] = 0xDa;
-  tmsg.Data[1] = 0xCE;
-  tmsg.Data[2] = 0xAC;
-  tmsg.Data[3] = 0xDC;
-  hcan1.pTxMsg = &tmsg;
 
   /* USER CODE END 2 */
 
@@ -155,23 +151,23 @@ int main(void)
 		  last_count=counter;
 		  M24SR_Program(counter);
 	  }
-	  if(read_flag==1){
-		  if(TT4_ReadURI(&test) == SUCCESS){
-			  result = strcmp(test.URI_Message,comparator);
-			  if (result == 0){
-				  HAL_GPIO_WritePin(LED3_GPIO_Port,LED3_Pin,GPIO_PIN_SET);
-			  }
-			  else {
-				  HAL_GPIO_WritePin(LED4_GPIO_Port,LED4_Pin,GPIO_PIN_SET);
-			  }
-		  }
-		  else {
-			  HAL_GPIO_WritePin(LED4_GPIO_Port,LED4_Pin,GPIO_PIN_SET);
-		  }
-		  read_flag=0;
-	  }
+//	  if(read_flag==1){
+//		  if(TT4_ReadURI(&test) == SUCCESS){
+//			  result = strcmp(test.URI_Message,comparator);
+//			  if (result == 0){
+//				  HAL_GPIO_WritePin(LED3_GPIO_Port,LED3_Pin,GPIO_PIN_SET);
+//			  }
+//			  else {
+//				  HAL_GPIO_WritePin(LED4_GPIO_Port,LED4_Pin,GPIO_PIN_SET);
+//			  }
+//		  }
+//		  else {
+//			  HAL_GPIO_WritePin(LED4_GPIO_Port,LED4_Pin,GPIO_PIN_SET);
+//		  }
+//		  read_flag=0;
+//	  }
 	  if(can_flag==1){
-		  HAL_CAN_Transmit(&hcan1, 10);
+		  CanSend(Canid, Canmsg);
 		  can_flag = 0;
 	  }
   /* USER CODE END WHILE */
@@ -264,24 +260,24 @@ static void MX_CAN1_Init(void)
 }
 
 /* I2C1 init function */
-static void MX_I2C1_Init(void)
-{
-
-  hi2c1.Instance = I2C1;
-  hi2c1.Init.ClockSpeed = 400000;
-  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
-  hi2c1.Init.OwnAddress1 = 0;
-  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c1.Init.OwnAddress2 = 0;
-  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-}
+//static void MX_I2C1_Init(void)
+//{
+//
+//  hi2c1.Instance = I2C1;
+//  hi2c1.Init.ClockSpeed = 400000;
+//  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
+//  hi2c1.Init.OwnAddress1 = 0;
+//  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+//  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+//  hi2c1.Init.OwnAddress2 = 0;
+//  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+//  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+//  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+//  {
+//    _Error_Handler(__FILE__, __LINE__);
+//  }
+//
+//}
 
 /* TIM10 init function */
 static void MX_TIM10_Init(void)
@@ -363,31 +359,6 @@ void M24SR_I2CInit (){
 
 	if( hi2c1.Instance == M24SR_I2C)
 		  HAL_I2C_DeInit(&hi2c1);
-
-//	I2C1_FORCE_RESET();
-//	HAL_Delay(1000);
-//	I2C1_RELEASE_RESET();
-//	HAL_GPIO_DeInit(SCL_GPIO_Port, SCL_Pin);
-//	HAL_GPIO_DeInit(SDA_GPIO_Port, SDA_Pin);
-//	__HAL_AFIO_REMAP_I2C1_DISABLE();
-//
-//	GPIO_InitTypeDef  GPIO_InitStruct;
-//	I2Cx_SCL_GPIO_CLK_ENABLE();
-//	I2Cx_SDA_GPIO_CLK_ENABLE();
-//	__HAL_RCC_AFIO_CLK_ENABLE();
-//	I2Cx_CLK_ENABLE();
-//	GPIO_InitStruct.Pin       = SCL_Pin;
-//	GPIO_InitStruct.Mode      = GPIO_MODE_AF_OD;
-//	GPIO_InitStruct.Pull      = GPIO_PULLUP;
-//	GPIO_InitStruct.Speed     = GPIO_SPEED_HIGH;
-//	HAL_GPIO_Init(SCL_GPIO_Port, &GPIO_InitStruct);
-//	GPIO_InitStruct.Pin		  = SDA_Pin;
-//	GPIO_InitStruct.Mode      = GPIO_MODE_AF_OD;
-//	GPIO_InitStruct.Pull      = GPIO_PULLUP;
-//	GPIO_InitStruct.Speed     = GPIO_SPEED_HIGH;
-//	HAL_GPIO_Init(SDA_GPIO_Port, &GPIO_InitStruct);
-//	__HAL_AFIO_REMAP_I2C1_ENABLE();
-
 	hi2c1.Instance 	     = M24SR_I2C;
 	hi2c1.Init.AddressingMode  = I2C_ADDRESSINGMODE_7BIT;
 	#if defined (STM32F302x8)
@@ -454,9 +425,14 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
 	if(GPIO_Pin == M24SR_GPO_PIN)
 	{
-		HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
 		if( uSynchroMode == M24SR_INTERRUPT_GPO)
 			GPO_Low = 1;
+		can_flag = 1;
+		Canid[0] = 0x141;
+		Canmsg[0] = 0x80;
+		Canmsg[1] = 0x01;
+		Canmsg[2] = 0x55;
+		Canmsg[3] = 0x55;
 	}
 	if(GPIO_Pin == Button_Pin){
 		counter++;
@@ -499,14 +475,20 @@ void M24SR_Program(uint16_t counter){
 
 void CAN_filter_init(void)
 {
+	static CanTxMsgTypeDef TxMsg;
+	static CanRxMsgTypeDef RxMsg;
+
+	hcan1.pRxMsg = &RxMsg;
+	hcan1.pTxMsg = &TxMsg;
+
 	CAN_FilterConfTypeDef  sFilterConfig;
 	/*##-2- Configure the CAN Filter ###########################################*/
 	sFilterConfig.FilterNumber = 0;
     sFilterConfig.FilterMode = CAN_FILTERMODE_IDMASK;
     sFilterConfig.FilterScale = CAN_FILTERSCALE_32BIT;
-    sFilterConfig.FilterIdHigh = 0x100 << 5;
+    sFilterConfig.FilterIdHigh = 0x0000;
     sFilterConfig.FilterIdLow = 0x0000;
-    sFilterConfig.FilterMaskIdHigh = 0x700 << 5;
+    sFilterConfig.FilterMaskIdHigh = 0x0000;
     sFilterConfig.FilterMaskIdLow = 0x0000;
     sFilterConfig.FilterFIFOAssignment = CAN_FILTER_FIFO0;
     sFilterConfig.FilterActivation = ENABLE;
@@ -514,20 +496,82 @@ void CAN_filter_init(void)
     HAL_CAN_ConfigFilter(&hcan1, &sFilterConfig);
 }
 
+void RxIntEnable(CAN_HandleTypeDef *CanHandle) {
+	if(CanHandle->State == HAL_CAN_STATE_BUSY_TX)
+	  CanHandle->State = HAL_CAN_STATE_BUSY_TX_RX0;
+	else {
+	  CanHandle->State = HAL_CAN_STATE_BUSY_RX0;
+
+		/* Set CAN error code to none */
+		CanHandle->ErrorCode = HAL_CAN_ERROR_NONE;
+
+		/* Enable Error warning Interrupt */
+		__HAL_CAN_ENABLE_IT(CanHandle, CAN_IT_EWG);
+
+		/* Enable Error passive Interrupt */
+		__HAL_CAN_ENABLE_IT(CanHandle, CAN_IT_EPV);
+
+		/* Enable Bus-off Interrupt */
+		__HAL_CAN_ENABLE_IT(CanHandle, CAN_IT_BOF);
+
+		/* Enable Last error code Interrupt */
+		__HAL_CAN_ENABLE_IT(CanHandle, CAN_IT_LEC);
+
+		/* Enable Error Interrupt */
+		__HAL_CAN_ENABLE_IT(CanHandle, CAN_IT_ERR);
+	  }
+
+	  // Enable FIFO 0 message pending Interrupt
+	  __HAL_CAN_ENABLE_IT(CanHandle, CAN_IT_FMP0);
+}
+
+void HAL_CAN_RxCpltCallback(CAN_HandleTypeDef *CanHandle){
+	if(CanHandle->pRxMsg->StdId == 0x140 || CanHandle->pRxMsg->StdId == 0x141){
+		if(CanHandle->pRxMsg->DLC == 4){
+		Canid[0] = CanHandle->pRxMsg->StdId;
+		Canmsg[0] = CanHandle->pRxMsg->Data[0];
+		Canmsg[1] = CanHandle->pRxMsg->Data[1];
+		Canmsg[2] = CanHandle->pRxMsg->Data[2];
+		Canmsg[3] = CanHandle->pRxMsg->Data[3];
+		}
+	}
+	if(Canmsg[0] == 0x80 && Canmsg[1] == 0x01){
+		HAL_GPIO_WritePin(LED2_GPIO_Port,LED2_Pin,GPIO_PIN_SET);
+	}
+	if(Canmsg[0] == 0x80 && Canmsg[1] == 0x00){
+		HAL_GPIO_WritePin(LED2_GPIO_Port,LED2_Pin,GPIO_PIN_RESET);
+	}
+	if(Canmsg[0] == 0x88){
+		HAL_GPIO_TogglePin(RF_DIS_GPIO_Port,RF_DIS_Pin);
+	}
+
+	RxIntEnable(CanHandle);
+}
+
+void CanSend (uint16_t ID[2], uint8_t Msg[8]){
+	  tmsg.StdId = ID[0];
+	  tmsg.IDE = CAN_ID_STD;
+	  tmsg.RTR = CAN_RTR_DATA;
+	  tmsg.DLC = 4;
+	  tmsg.Data[0] = Msg[0];
+	  tmsg.Data[1] = Msg[1];
+	  tmsg.Data[2] = Msg[2];
+	  tmsg.Data[3] = Msg[3];
+	  hcan1.pTxMsg = &tmsg;
+
+	  HAL_CAN_Transmit(&hcan1, 10);
+}
+
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if(htim->Instance == TIM10){
 		led_effect++;
 		if (led_effect>=5){
-			HAL_GPIO_WritePin(LED2_GPIO_Port,LED2_Pin,GPIO_PIN_RESET);
 			HAL_GPIO_WritePin(LED3_GPIO_Port,LED3_Pin,GPIO_PIN_RESET);
 			HAL_GPIO_WritePin(LED4_GPIO_Port,LED4_Pin,GPIO_PIN_RESET);
 			if (read_flag == 1){
 				read_flag = 0;
 			}
-			else {
-				read_flag = 1;
-			}
-			can_flag = 1;
 			led_effect = 0;
 		}
 	}
