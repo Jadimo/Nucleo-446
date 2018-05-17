@@ -41,7 +41,7 @@
 #include "stm32f4xx_hal.h"
 
 /* USER CODE BEGIN Includes */
-
+#include "authentication.h"
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -53,14 +53,13 @@ TIM_HandleTypeDef htim10;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-extern uint8_t uSynchroMode;
-extern uint8_t GPO_Low;
 uint16_t counter;
 uint16_t last_count;
 uint16_t led_effect;
+uint8_t i;
 int read_flag;
 int can_flag;
-char comparator[80];
+char comparator[20];
 int result;
 sURI_Info URI;
 sAARInfo App;
@@ -71,6 +70,7 @@ CanTxMsgTypeDef tmsg;
 CanRxMsgTypeDef rmsg;
 uint8_t Canmsg[8];
 uint16_t Canid[2];
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -140,6 +140,14 @@ int main(void)
 
   HAL_Delay(200);
 
+  M24SR_ManageGPO(WIP,RF_GPO);
+
+  strcpy(App.PakageName,"com.wakdev.wdnfc");
+  while (TT4_AddAAR(&App)!=SUCCESS);
+
+  read_flag = 0;
+  i = 0;
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -149,23 +157,38 @@ int main(void)
 	  if(counter!=last_count){
 		  HAL_GPIO_TogglePin(LED1_GPIO_Port,LED1_Pin);
 		  last_count=counter;
-		  M24SR_Program(counter);
+		  //M24SR_Program(counter);
+		  while (TT4_AddAAR(&App)!=SUCCESS);
 	  }
-//	  if(read_flag==1){
-//		  if(TT4_ReadURI(&test) == SUCCESS){
-//			  result = strcmp(test.URI_Message,comparator);
-//			  if (result == 0){
-//				  HAL_GPIO_WritePin(LED3_GPIO_Port,LED3_Pin,GPIO_PIN_SET);
-//			  }
-//			  else {
-//				  HAL_GPIO_WritePin(LED4_GPIO_Port,LED4_Pin,GPIO_PIN_SET);
-//			  }
-//		  }
-//		  else {
-//			  HAL_GPIO_WritePin(LED4_GPIO_Port,LED4_Pin,GPIO_PIN_SET);
-//		  }
-//		  read_flag=0;
-//	  }
+	  if(read_flag==1){
+		  if(TT4_ReadURI(&test) == SUCCESS){
+			  while(i < sizeof(*Authtable)){
+				  strcpy(comparator,Authtable[i]);
+				  result = strcmp(test.URI_Message,comparator);
+				  i++;
+				  if ( result == 0){
+					  break;
+				  }
+			  }
+			  i = 0;
+			  if (result == 0){
+				  HAL_GPIO_WritePin(LED3_GPIO_Port,LED3_Pin,GPIO_PIN_SET);
+				  can_flag = 1;
+				  Canid[0] = 0x141;
+				  Canmsg[0] = 0x80;
+				  Canmsg[1] = 0x01;
+				  Canmsg[2] = 0x55;
+				  Canmsg[3] = 0x55;
+			  }
+			  else {
+				  HAL_GPIO_WritePin(LED4_GPIO_Port,LED4_Pin,GPIO_PIN_SET);
+			  }
+		  }
+		  else {
+			  HAL_GPIO_WritePin(LED1_GPIO_Port,LED1_Pin,GPIO_PIN_SET);
+		  }
+		  read_flag=0;
+	  }
 	  if(can_flag==1){
 		  CanSend(Canid, Canmsg);
 		  can_flag = 0;
@@ -333,7 +356,7 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : GPO_Pin */
   GPIO_InitStruct.Pin = GPO_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPO_GPIO_Port, &GPIO_InitStruct);
 
@@ -425,14 +448,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
 	if(GPIO_Pin == M24SR_GPO_PIN)
 	{
-		if( uSynchroMode == M24SR_INTERRUPT_GPO)
-			GPO_Low = 1;
-		can_flag = 1;
-		Canid[0] = 0x141;
-		Canmsg[0] = 0x80;
-		Canmsg[1] = 0x01;
-		Canmsg[2] = 0x55;
-		Canmsg[3] = 0x55;
+
 	}
 	if(GPIO_Pin == Button_Pin){
 		counter++;
@@ -567,11 +583,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if(htim->Instance == TIM10){
 		led_effect++;
 		if (led_effect>=5){
+			HAL_GPIO_WritePin(LED1_GPIO_Port,LED1_Pin,GPIO_PIN_RESET);
 			HAL_GPIO_WritePin(LED3_GPIO_Port,LED3_Pin,GPIO_PIN_RESET);
 			HAL_GPIO_WritePin(LED4_GPIO_Port,LED4_Pin,GPIO_PIN_RESET);
-			if (read_flag == 1){
-				read_flag = 0;
-			}
 			led_effect = 0;
 		}
 	}

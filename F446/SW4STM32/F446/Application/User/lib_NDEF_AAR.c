@@ -97,27 +97,30 @@ uint16_t NDEF_AddAAR ( sAARInfo *pAARStruct )
 	
 	/* Do we have to add AAR to an existing NDEF message */	
 	/* retrieve current NDEF size and current record flag*/
-	status = ForceReadData( 0 , 3 , NDEF_Buffer);
+//	status = ForceReadData( 0 , 3 , NDEF_Buffer);
 	
-	if( status == NDEF_ACTION_COMPLETED)
-	{
-		NDEF_Size = (uint16_t) (NDEF_Buffer[0] << 8);
-		NDEF_Size = NDEF_Size | (uint16_t) (NDEF_Buffer[1]);
-		RecordFlag = NDEF_Buffer[2];
-	}
-	
-	if( NDEF_Size != 0)
-	{
-		AAROffset = NDEF_Size +2;
-		RecordFlag &= 0xBF; /* remove ME flag on NDEF */
-		AARRecordFlag = 0x54; /* don't put MB flag */
-	}
-	else
-	{
-		AAROffset = 2;
-		AARRecordFlag = 0xD4; /* put MB and ME flag */
-	}
-  
+//	if( status == NDEF_ACTION_COMPLETED)
+//	{
+//		NDEF_Size = (uint16_t) (NDEF_Buffer[0] << 8);
+//		NDEF_Size = NDEF_Size | (uint16_t) (NDEF_Buffer[1]);
+//		RecordFlag = NDEF_Buffer[2];
+//	}
+//
+//	if( NDEF_Size != 0)
+//	{
+//		AAROffset = NDEF_Size +2;
+//		RecordFlag &= 0xBF; /* remove ME flag on NDEF */
+//		AARRecordFlag = 0x54; /* don't put MB flag */
+//	}
+//	else
+//	{
+//		AAROffset = 2;
+//		AARRecordFlag = 0xD4; /* put MB and ME flag */
+//	}
+
+	AAROffset = 2;
+	AARRecordFlag = 0xD4; /* put MB and ME flag */
+
 	/* fill AAR record header */
 	Offset = 0;
 	NDEF_Buffer[Offset++] = AARRecordFlag;   /* Record Flag */
