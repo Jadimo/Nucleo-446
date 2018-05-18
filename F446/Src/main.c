@@ -57,6 +57,7 @@ uint16_t counter;
 uint16_t last_count;
 uint16_t led_effect;
 uint8_t i;
+uint8_t irqcntr;
 int read_flag;
 int can_flag;
 char comparator[20];
@@ -122,7 +123,7 @@ int main(void)
   MX_GPIO_Init();
   MX_CAN1_Init();
   MX_TIM10_Init();
- // MX_I2C1_Init();
+//  MX_I2C1_Init();
 
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start_IT(&htim10);
@@ -140,13 +141,14 @@ int main(void)
 
   HAL_Delay(200);
 
-  M24SR_ManageGPO(WIP,RF_GPO);
+  M24SR_ManageGPO(SESSION_OPENED,RF_GPO);
 
   strcpy(App.PakageName,"com.wakdev.wdnfc");
   while (TT4_AddAAR(&App)!=SUCCESS);
 
   read_flag = 0;
   i = 0;
+  irqcntr = 0;
 
   /* USER CODE END 2 */
 
@@ -155,12 +157,11 @@ int main(void)
   while (1)
   {
 	  if(counter!=last_count){
-		  HAL_GPIO_TogglePin(LED1_GPIO_Port,LED1_Pin);
 		  last_count=counter;
 		  //M24SR_Program(counter);
-		  while (TT4_AddAAR(&App)!=SUCCESS);
 	  }
 	  if(read_flag==1){
+		  HAL_Delay(1000);
 		  if(TT4_ReadURI(&test) == SUCCESS){
 			  while(i < sizeof(*Authtable)){
 				  strcpy(comparator,Authtable[i]);
@@ -183,16 +184,19 @@ int main(void)
 			  else {
 				  HAL_GPIO_WritePin(LED4_GPIO_Port,LED4_Pin,GPIO_PIN_SET);
 			  }
+			  while (TT4_AddAAR(&App)!=SUCCESS);
 		  }
 		  else {
 			  HAL_GPIO_WritePin(LED1_GPIO_Port,LED1_Pin,GPIO_PIN_SET);
 		  }
-		  read_flag=0;
+		  irqcntr = 1;
+		  read_flag = 0;
 	  }
 	  if(can_flag==1){
 		  CanSend(Canid, Canmsg);
 		  can_flag = 0;
 	  }
+	  HAL_GPIO_WritePin(LED1_GPIO_Port,LED1_Pin,HAL_GPIO_ReadPin(GPO_GPIO_Port,GPO_Pin));
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
@@ -357,7 +361,7 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin : GPO_Pin */
   GPIO_InitStruct.Pin = GPO_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPO_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : LED2_Pin LED3_Pin */
@@ -448,7 +452,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
 	if(GPIO_Pin == M24SR_GPO_PIN)
 	{
-
+		read_flag = 1;
 	}
 	if(GPIO_Pin == Button_Pin){
 		counter++;
@@ -581,12 +585,15 @@ void CanSend (uint16_t ID[2], uint8_t Msg[8]){
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if(htim->Instance == TIM10){
-		led_effect++;
-		if (led_effect>=5){
-			HAL_GPIO_WritePin(LED1_GPIO_Port,LED1_Pin,GPIO_PIN_RESET);
-			HAL_GPIO_WritePin(LED3_GPIO_Port,LED3_Pin,GPIO_PIN_RESET);
-			HAL_GPIO_WritePin(LED4_GPIO_Port,LED4_Pin,GPIO_PIN_RESET);
-			led_effect = 0;
+		if(irqcntr == 1){
+			led_effect++;
+			if (led_effect>=5){
+				HAL_GPIO_WritePin(LED1_GPIO_Port,LED1_Pin,GPIO_PIN_RESET);
+				HAL_GPIO_WritePin(LED3_GPIO_Port,LED3_Pin,GPIO_PIN_RESET);
+				HAL_GPIO_WritePin(LED4_GPIO_Port,LED4_Pin,GPIO_PIN_RESET);
+				led_effect = 0;
+				irqcntr = 0;
+			}
 		}
 	}
 }
