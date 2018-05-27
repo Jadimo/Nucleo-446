@@ -465,7 +465,6 @@ uint16_t TT4_AddAAR(sAARInfo *pAAR)
 	return status;
 }
 
-
 /**
   * @}
   */

@@ -54,23 +54,23 @@ TIM_HandleTypeDef htim10;
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 uint16_t counter;
-uint16_t last_count;
-uint16_t led_effect;
 uint8_t i;
 uint8_t irqcntr;
-int read_flag;
-int can_flag;
-char comparator[20];
-int result;
+uint8_t try;
+uint8_t read_flag;
+uint8_t can_flag;
+uint8_t bttnprs;
+uint8_t result;
 sURI_Info URI;
-sAARInfo App;
-sSMSInfo sms;
-sGeoInfo geo;
-sURI_Info test;
+sAARInfo AAR;
 CanTxMsgTypeDef tmsg;
 CanRxMsgTypeDef rmsg;
 uint8_t Canmsg[8];
 uint16_t Canid[2];
+extern uint16_t NFCID;
+extern uint16_t DOORID;
+extern uint8_t stoper;
+char comparator[20];
 
 /* USER CODE END PV */
 
@@ -85,7 +85,6 @@ static void MX_TIM10_Init(void);
 /* Private function prototypes -----------------------------------------------*/
 void M24SR_I2CInit(void);
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
-void M24SR_Program(uint16_t counter);
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
 void CAN_filter_init(void);
 void RxIntEnable(CAN_HandleTypeDef *CanHandle);
@@ -123,17 +122,10 @@ int main(void)
   MX_GPIO_Init();
   MX_CAN1_Init();
   MX_TIM10_Init();
-//  MX_I2C1_Init();
 
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start_IT(&htim10);
-
   while (TT4_Init() != SUCCESS);
-
-  counter=0;
-  last_count=-1;
-  led_effect=0;
-
   CAN_filter_init();
   if(HAL_CAN_Receive_IT(&hcan1, CAN_FIFO0) != HAL_OK) {
 	  HAL_GPIO_TogglePin(LED4_GPIO_Port,LED4_Pin);
@@ -141,14 +133,16 @@ int main(void)
 
   HAL_Delay(200);
 
-  M24SR_ManageGPO(SESSION_OPENED,RF_GPO);
+  M24SR_ManageGPO(WIP,RF_GPO);
 
-  strcpy(App.PakageName,"com.wakdev.wdnfc");
-  while (TT4_AddAAR(&App)!=SUCCESS);
+  strcpy(AAR.PakageName,"com.jadimo.nfcib");
+  while (TT4_AddAAR(&AAR)!=SUCCESS);
 
   read_flag = 0;
   i = 0;
   irqcntr = 0;
+  counter=0;
+  try = 5;
 
   /* USER CODE END 2 */
 
@@ -156,16 +150,24 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  if(counter!=last_count){
-		  last_count=counter;
-		  //M24SR_Program(counter);
+	  if(bttnprs == 1){
+		  Canid[0] = DOORID;
+		  Canmsg[0] = 0x80;
+		  Canmsg[1] = 0x00;
+		  Canmsg[2] = 0x55;
+		  Canmsg[3] = 0x55;
+		  can_flag = 1;
+		  counter = stoper;
+		  bttnprs = 0;
 	  }
 	  if(read_flag==1){
-		  HAL_Delay(1000);
-		  if(TT4_ReadURI(&test) == SUCCESS){
+		  HAL_Delay(350);
+		  HAL_GPIO_WritePin(RF_DIS_GPIO_Port,RF_DIS_Pin,GPIO_PIN_SET);
+		  while (try > 0){
+		  if(TT4_ReadURI(&URI) == SUCCESS){
 			  while(i < sizeof(*Authtable)){
 				  strcpy(comparator,Authtable[i]);
-				  result = strcmp(test.URI_Message,comparator);
+				  result = strcmp(URI.URI_Message,comparator);
 				  i++;
 				  if ( result == 0){
 					  break;
@@ -174,8 +176,7 @@ int main(void)
 			  i = 0;
 			  if (result == 0){
 				  HAL_GPIO_WritePin(LED3_GPIO_Port,LED3_Pin,GPIO_PIN_SET);
-				  can_flag = 1;
-				  Canid[0] = 0x141;
+				  Canid[0] = DOORID;
 				  Canmsg[0] = 0x80;
 				  Canmsg[1] = 0x01;
 				  Canmsg[2] = 0x55;
@@ -183,14 +184,24 @@ int main(void)
 			  }
 			  else {
 				  HAL_GPIO_WritePin(LED4_GPIO_Port,LED4_Pin,GPIO_PIN_SET);
+				  Canid[0] = DOORID;
+				  Canmsg[0] = 0x80;
+				  Canmsg[1] = 0x00;
+				  Canmsg[2] = 0x55;
+				  Canmsg[3] = 0x55;
 			  }
-			  while (TT4_AddAAR(&App)!=SUCCESS);
+			  can_flag = 1;
+			  while (TT4_AddAAR(&AAR)!=SUCCESS);
+			  break;
 		  }
 		  else {
-			  HAL_GPIO_WritePin(LED1_GPIO_Port,LED1_Pin,GPIO_PIN_SET);
+			  HAL_GPIO_TogglePin(LED1_GPIO_Port,LED1_Pin);
+		  }
+		  try--;
 		  }
 		  irqcntr = 1;
 		  read_flag = 0;
+		  try = 5;
 	  }
 	  if(can_flag==1){
 		  CanSend(Canid, Canmsg);
@@ -455,41 +466,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 		read_flag = 1;
 	}
 	if(GPIO_Pin == Button_Pin){
-		counter++;
-		if(counter >= 4){
-			counter = 0;
-		}
-	}
-}
-
-void M24SR_Program(uint16_t counter){
-	switch(counter){
-	case 0:
-		strcpy(URI.protocol,URI_ID_0x01_STRING);
-		strcpy(URI.URI_Message,"google.com");
-		strcpy(URI.Information,"/0");
-		while (TT4_WriteURI(&URI) != SUCCESS);
-		strcpy(comparator,"google.com");
-		break;
-	case 1:
-		strcpy(App.PakageName,"com.sonyericsson.music");
-		while (TT4_AddAAR(&App)!=SUCCESS);
-		break;
-	case 2:
-		strcpy(geo.Latitude,"50.026596");
-		strcpy(geo.Longitude,"21.984825");
-		strcpy(geo.Information,"\0");
-		while(TT4_WriteGeo(&geo) != SUCCESS);
-		break;
-	case 3:
-		strcpy(sms.Message,"Hello World");
-		strcpy(sms.PhoneNumber,"792 240 994");
-		strcpy(sms.Information,"\0");
-		while(TT4_WriteSMS(&sms) != SUCCESS);
-		break;
-	default:
-		counter=0;
-		break;
+		bttnprs = 1;
 	}
 }
 
@@ -546,7 +523,7 @@ void RxIntEnable(CAN_HandleTypeDef *CanHandle) {
 }
 
 void HAL_CAN_RxCpltCallback(CAN_HandleTypeDef *CanHandle){
-	if(CanHandle->pRxMsg->StdId == 0x140 || CanHandle->pRxMsg->StdId == 0x141){
+	if(CanHandle->pRxMsg->StdId == NFCID){
 		if(CanHandle->pRxMsg->DLC == 4){
 		Canid[0] = CanHandle->pRxMsg->StdId;
 		Canmsg[0] = CanHandle->pRxMsg->Data[0];
@@ -586,12 +563,13 @@ void CanSend (uint16_t ID[2], uint8_t Msg[8]){
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if(htim->Instance == TIM10){
 		if(irqcntr == 1){
-			led_effect++;
-			if (led_effect>=5){
+			counter++;
+			if (counter >= stoper){
 				HAL_GPIO_WritePin(LED1_GPIO_Port,LED1_Pin,GPIO_PIN_RESET);
 				HAL_GPIO_WritePin(LED3_GPIO_Port,LED3_Pin,GPIO_PIN_RESET);
 				HAL_GPIO_WritePin(LED4_GPIO_Port,LED4_Pin,GPIO_PIN_RESET);
-				led_effect = 0;
+				HAL_GPIO_WritePin(RF_DIS_GPIO_Port,RF_DIS_Pin,GPIO_PIN_RESET);
+				counter = 0;
 				irqcntr = 0;
 			}
 		}
@@ -611,6 +589,8 @@ void _Error_Handler(char * file, int line)
   /* User can add his own implementation to report the HAL error return state */
   while(1) 
   {
+	  HAL_GPIO_TogglePin(LED4_GPIO_Port,LED4_Pin);
+	  HAL_Delay(750);
   }
   /* USER CODE END Error_Handler_Debug */ 
 }
