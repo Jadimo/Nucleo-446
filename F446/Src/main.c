@@ -62,6 +62,7 @@ uint8_t can_flag;
 uint8_t bttnprs;
 uint8_t result;
 sURI_Info URI;
+sURI_Info RDY;
 sAARInfo AAR;
 CanTxMsgTypeDef tmsg;
 CanRxMsgTypeDef rmsg;
@@ -131,12 +132,17 @@ int main(void)
 	  HAL_GPIO_TogglePin(LED4_GPIO_Port,LED4_Pin);
   }
 
-  HAL_Delay(200);
+  HAL_Delay(10);
 
   M24SR_ManageGPO(WIP,RF_GPO);
 
+  strcpy(RDY.protocol,URI_ID_0x0F_STRING);
+  strcpy(RDY.URI_Message,"wait");
+  strcpy(RDY.Information,"\0");
+  while (TT4_WriteURI(&RDY) != SUCCESS);
+  HAL_Delay(10);
   strcpy(AAR.PakageName,"com.jadimo.nfcib");
-  while (TT4_AddAAR(&AAR)!=SUCCESS);
+  while (TT4_AddAAR(&AAR) != SUCCESS);
 
   read_flag = 0;
   i = 0;
@@ -160,54 +166,53 @@ int main(void)
 		  counter = stoper;
 		  bttnprs = 0;
 	  }
-	  if(read_flag==1){
-		  HAL_Delay(350);
+	  if(read_flag == 1){
+		  HAL_Delay(500);
 		  HAL_GPIO_WritePin(RF_DIS_GPIO_Port,RF_DIS_Pin,GPIO_PIN_SET);
-		  while (try > 0){
-		  if(TT4_ReadURI(&URI) == SUCCESS){
-			  while(i < sizeof(*Authtable)){
-				  strcpy(comparator,Authtable[i]);
-				  result = strcmp(URI.URI_Message,comparator);
-				  i++;
-				  if ( result == 0){
-					  break;
+		  if(TT4_ReadURI(&URI) == SUCCESS && strcmp(URI.protocol,URI_ID_0x0F_STRING) == 0){
+			  if(strcmp(URI.URI_Message,"wait") == 0){
+				  HAL_GPIO_TogglePin(LED1_GPIO_Port,LED1_Pin);
+			  }
+			  else{
+				  while(i < sizeof(*Authtable)){
+					  strcpy(comparator,Authtable[i]);
+					  result = strcmp(URI.URI_Message,comparator);
+					  i++;
+					  if ( result == 0){
+						  break;
+					  }
 				  }
+				  i = 0;
+				  if (result == 0){
+				    HAL_GPIO_WritePin(LED3_GPIO_Port,LED3_Pin,GPIO_PIN_SET);
+				    Canid[0] = DOORID;
+				    Canmsg[0] = 0x80;
+				    Canmsg[1] = 0x01;
+				    Canmsg[2] = 0x55;
+				    Canmsg[3] = 0x55;
+				  }
+				  else {
+				    HAL_GPIO_WritePin(LED4_GPIO_Port,LED4_Pin,GPIO_PIN_SET);
+				    Canid[0] = DOORID;
+				    Canmsg[0] = 0x80;
+				    Canmsg[1] = 0x00;
+				    Canmsg[2] = 0x55;
+				    Canmsg[3] = 0x55;
+				  }
+				  can_flag = 1;
+				  while (TT4_WriteURI(&RDY) != SUCCESS);
+				  HAL_Delay(10);
+				  while (TT4_AddAAR(&AAR) != SUCCESS);
 			  }
-			  i = 0;
-			  if (result == 0){
-				  HAL_GPIO_WritePin(LED3_GPIO_Port,LED3_Pin,GPIO_PIN_SET);
-				  Canid[0] = DOORID;
-				  Canmsg[0] = 0x80;
-				  Canmsg[1] = 0x01;
-				  Canmsg[2] = 0x55;
-				  Canmsg[3] = 0x55;
-			  }
-			  else {
-				  HAL_GPIO_WritePin(LED4_GPIO_Port,LED4_Pin,GPIO_PIN_SET);
-				  Canid[0] = DOORID;
-				  Canmsg[0] = 0x80;
-				  Canmsg[1] = 0x00;
-				  Canmsg[2] = 0x55;
-				  Canmsg[3] = 0x55;
-			  }
-			  can_flag = 1;
-			  while (TT4_AddAAR(&AAR)!=SUCCESS);
-			  break;
+			  irqcntr = 1;
+			  read_flag = 0;
+
 		  }
-		  else {
-			  HAL_GPIO_TogglePin(LED1_GPIO_Port,LED1_Pin);
-		  }
-		  try--;
-		  }
-		  irqcntr = 1;
-		  read_flag = 0;
-		  try = 5;
 	  }
-	  if(can_flag==1){
+	  if(can_flag == 1){
 		  CanSend(Canid, Canmsg);
 		  can_flag = 0;
 	  }
-	  HAL_GPIO_WritePin(LED1_GPIO_Port,LED1_Pin,HAL_GPIO_ReadPin(GPO_GPIO_Port,GPO_Pin));
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
@@ -572,6 +577,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 				counter = 0;
 				irqcntr = 0;
 			}
+			HAL_GPIO_TogglePin(LED1_GPIO_Port,LED1_Pin);
 		}
 	}
 }

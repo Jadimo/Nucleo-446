@@ -69,7 +69,7 @@ uint16_t NDEF_AddAAR ( sAARInfo *pAARStruct )
 	uint16_t Offset=0;
 	uint32_t AAROffset = 0;
 	uint16_t NDEF_Size = 0;
-//	uint8_t RecordFlag=0;
+	uint8_t RecordFlag=0;
 	uint8_t AARRecordFlag;
 	
   /* AAR: External Type Record Header */
@@ -97,30 +97,26 @@ uint16_t NDEF_AddAAR ( sAARInfo *pAARStruct )
 	
 	/* Do we have to add AAR to an existing NDEF message */	
 	/* retrieve current NDEF size and current record flag*/
-//	status = ForceReadData( 0 , 3 , NDEF_Buffer);
-//
-//	if( status == NDEF_ACTION_COMPLETED)
-//	{
-//		NDEF_Size = (uint16_t) (NDEF_Buffer[0] << 8);
-//		NDEF_Size = NDEF_Size | (uint16_t) (NDEF_Buffer[1]);
-//		RecordFlag = NDEF_Buffer[2];
-//	}
-//
-//	if( NDEF_Size != 0)
-//	{
-//		AAROffset = NDEF_Size +2;
-//		RecordFlag &= 0xBF; /* remove ME flag on NDEF */
-//		AARRecordFlag = 0x54; /* don't put MB flag */
-//	}
-//	else
-//	{
-//		AAROffset = 2;
-//		AARRecordFlag = 0xD4; /* put MB and ME flag */
-//	}
+	status = ForceReadData( 0 , 3 , NDEF_Buffer);
 
+	if( status == NDEF_ACTION_COMPLETED)
+	{
+		NDEF_Size = (uint16_t) (NDEF_Buffer[0] << 8);
+		NDEF_Size = NDEF_Size | (uint16_t) (NDEF_Buffer[1]);
+		RecordFlag = NDEF_Buffer[2];
+	}
 
-	AAROffset = 2;
-	AARRecordFlag = 0xD4;
+	if( NDEF_Size != 0)
+	{
+		AAROffset = NDEF_Size +2;
+		RecordFlag &= 0xBF; /* remove ME flag on NDEF */
+		AARRecordFlag = 0x54; /* don't put MB flag */
+	}
+	else
+	{
+		AAROffset = 2;
+		AARRecordFlag = 0xD4; /* put MB and ME flag */
+	}
 
 	/* fill AAR record header */
 	Offset = 0;
@@ -143,15 +139,15 @@ uint16_t NDEF_AddAAR ( sAARInfo *pAARStruct )
 	/* Write NDEF size to complete*/
 	if( status == NDEF_ACTION_COMPLETED)
 	{
-	//	DataSize = NDEF_Size + DataSize; /* Must add to the NDEF size the size of the AAR record*/
+		DataSize = NDEF_Size + DataSize; /* Must add to the NDEF size the size of the AAR record*/
 		NDEF_Buffer[0] = (DataSize & 0xFF00)>>8;
 		NDEF_Buffer[1] = (DataSize & 0x00FF);
-//		if( NDEF_Size != 0)
-//		{
-//			NDEF_Buffer[2] = RecordFlag;
-//			status = WriteData ( 0x00 , 3 , NDEF_Buffer);
-//		}
-//		else
+		if( NDEF_Size != 0)
+		{
+			NDEF_Buffer[2] = RecordFlag;
+			status = WriteData ( 0x00 , 3 , NDEF_Buffer);
+		}
+		else
 			status = WriteData ( 0x00 , 2 , NDEF_Buffer);
 	}
 	
