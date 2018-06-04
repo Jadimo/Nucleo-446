@@ -80,7 +80,6 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_CAN1_Init(void);
 static void MX_TIM10_Init(void);
-//static void MX_I2C1_Init(void);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
@@ -167,7 +166,7 @@ int main(void)
 		  bttnprs = 0;
 	  }
 	  if(read_flag == 1){
-		  HAL_Delay(500);
+		  HAL_Delay(400);
 		  HAL_GPIO_WritePin(RF_DIS_GPIO_Port,RF_DIS_Pin,GPIO_PIN_SET);
 		  if(TT4_ReadURI(&URI) == SUCCESS && strcmp(URI.protocol,URI_ID_0x0F_STRING) == 0){
 			  if(strcmp(URI.URI_Message,"wait") == 0){
@@ -200,13 +199,14 @@ int main(void)
 				    Canmsg[3] = 0x55;
 				  }
 				  can_flag = 1;
-				  while (TT4_WriteURI(&RDY) != SUCCESS);
 				  HAL_Delay(10);
-				  while (TT4_AddAAR(&AAR) != SUCCESS);
+				  TT4_WriteURI(&RDY);
+				  HAL_Delay(10);
+				  TT4_AddAAR(&AAR);
+				  strcpy(URI.URI_Message,"\0");
 			  }
 			  irqcntr = 1;
 			  read_flag = 0;
-
 		  }
 	  }
 	  if(can_flag == 1){
@@ -302,25 +302,6 @@ static void MX_CAN1_Init(void)
 
 }
 
-/* I2C1 init function */
-//static void MX_I2C1_Init(void)
-//{
-//
-//  hi2c1.Instance = I2C1;
-//  hi2c1.Init.ClockSpeed = 400000;
-//  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
-//  hi2c1.Init.OwnAddress1 = 0;
-//  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-//  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-//  hi2c1.Init.OwnAddress2 = 0;
-//  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-//  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-//  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
-//  {
-//    _Error_Handler(__FILE__, __LINE__);
-//  }
-//
-//}
 
 /* TIM10 init function */
 static void MX_TIM10_Init(void)
